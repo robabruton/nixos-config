@@ -1,0 +1,6 @@
+input {
+    trackpoint {
+        scroll-method "on-button-down"
+        scroll-button 274
+    }
+}

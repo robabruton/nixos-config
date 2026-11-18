@@ -153,7 +153,7 @@ getent passwd "$account" >/dev/null && fail "Choose a login name that is not a l
 
 source="$work/source"
 mkdir -- "$source"
-cp -R --no-preserve=mode -- "$THINKPAD_FLAKE"/{flake.nix,flake.lock,hosts,scripts} "$source/"
+cp -R --no-preserve=mode -- "$THINKPAD_FLAKE"/{flake.nix,flake.lock,hosts,modules,scripts} "$source/"
 printf '{
   users.users.%s = {
     isNormalUser = true;
