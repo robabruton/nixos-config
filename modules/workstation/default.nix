@@ -27,7 +27,12 @@
     environment = {
       etc."niri/config.kdl".text = builtins.readFile ./niri.kdl;
       etc."noctalia/config.toml".source = ./noctalia.toml;
-      systemPackages = [ pkgs.foot pkgs.noctalia ];
+      systemPackages = [
+        pkgs.firefox
+        pkgs.foot
+        pkgs.git
+        pkgs.noctalia
+      ];
     };
   };
 }

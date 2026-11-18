@@ -2,6 +2,7 @@ spawn-at-startup "env" "NOCTALIA_CONFIG_HOME=/etc" "noctalia"
 
 binds {
     Mod+Return { spawn "foot"; }
+    Mod+D repeat=false hotkey-overlay-title="Open the application launcher" { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
     Mod+Alt+L { spawn "noctalia" "msg" "session" "lock"; }
     Mod+Q { close-window; }
     Mod+Left { focus-column-left; }

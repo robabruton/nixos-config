@@ -5,6 +5,7 @@ chosen during installation. The preset session starts Niri with a
 Noctalia panel showing workspaces and the clock.
 
 - Press **Super+Enter** to open the Foot terminal.
+- Press **Super+D**, type **Firefox**, and press **Enter** to launch it.
 - Press **Super+Alt+L** to lock the session.
 - Press **Super+Q** to close the focused window.
 - Press **Super+Shift+E** and confirm to log out. The greeter returns.
@@ -19,6 +20,18 @@ from the text console.
 On the installed ThinkPad, check that the greeter appears on the
 internal panel after unlocking LUKS. Check the shortcuts on the built-in
 keyboard, including switching to TTY2 from inside the Niri session.
+
+## Firefox and Git
+
+Firefox keeps its profile in your home directory. To clone this public
+repository, run the following in Foot as your own account.
+
+```sh
+git clone https://github.com/robabruton/nixos-config.git
+```
+
+The public clone needs no credentials. Keep any Git credentials in
+your account's credential storage, outside the NixOS configuration.
 
 ## Session locking
 
