@@ -8,13 +8,22 @@ Usage: install-thinkpad --disk DEVICE --recovery-destination DIRECTORY
 
 Installs on the selected disk after displaying its layout and asking for exact
 erase confirmation. Stores a verified encrypted recovery archive on separate
-media.
+media. Requires an active NetworkManager Wi-Fi connection.
 USAGE
 }
 
 fail() {
   printf 'install-thinkpad: %s\n' "$*" >&2
   exit 1
+}
+
+# Requires Wi-Fi without reading connection names or credentials.
+require_wifi() {
+  local devices
+  devices=$(LC_ALL=C nmcli --terse --fields TYPE,STATE device status) ||
+    fail "Cannot query NetworkManager. Check that it is running on the live ISO."
+  grep -Fxq 'wifi:connected' <<< "$devices" ||
+    fail "Connect to Wi-Fi in the live desktop or with nmtui and retry. Disk erasure requires an active Wi-Fi connection."
 }
 
 if [[ ${1-} == --help && $# == 1 ]]; then
@@ -44,6 +53,7 @@ done
 [[ $EUID == 0 && -t 0 && -t 1 ]] || fail "Run as root in an interactive terminal on NixOS live media."
 [[ -d /sys/firmware/efi/efivars ]] || fail "Boot the live media in UEFI mode."
 [[ $(findmnt -n -o FSTYPE --target /run) == tmpfs ]] || fail "/run must be backed by tmpfs for temporary secrets."
+require_wifi
 
 exec 9>/run/lock/nixos-config-thinkpad-install
 flock -n 9 || fail "Another ThinkPad installation is running."
@@ -182,6 +192,7 @@ unset passphrase repeat
 
 [[ $(disk_identity) == "$target_identity" ]] || fail "Disk identity changed after preflight."
 [[ $(recovery_identity) == "$media_identity" ]] || fail "Recovery media changed after preflight."
+require_wifi
 layout_started=true
 disko "${disko_args[@]}" --yes-wipe-all-disks
 

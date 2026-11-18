@@ -14,13 +14,43 @@ unlocks the system volume before NixOS mounts the Btrfs subvolumes.
 | `/log` | `/var/log` |
 | `/snapshots` | `/.snapshots` |
 
+## Boot the live USB and verify Wi-Fi
+
+Download the [official graphical NixOS ISO](https://nixos.org/download/)
+for 64-bit Intel/AMD and write it to a USB drive. Select the USB's UEFI
+entry in the ThinkPad boot menu and wait for the live desktop. Use the
+desktop network menu to join your Wi-Fi network and enter its password
+when prompted. You can also open a terminal and run `nmtui`, choose
+**Activate a connection**, and select your network. Use the terminal on
+the live desktop for the remaining steps.
+
+Complete both checks on the physical ThinkPad before erasing any disk.
+
+- Confirm the Intel AX201 connects on the live USB.
+  `nmcli --fields DEVICE,TYPE,STATE device status` must show a
+  `wifi` device in the `connected` state.
+- Confirm GitHub access over that connection. The following commands
+  must return a remote HEAD and successfully clone the repository.
+
+If Git is missing from the live image, run `nix-shell -p git` first.
+
+```sh
+git ls-remote --exit-code https://github.com/robabruton/nixos-config.git HEAD
+git clone https://github.com/robabruton/nixos-config.git
+cd nixos-config
+```
+
+In the clone, use `git switch --detach` with the published, approved
+installer revision.
+
 ## Install
 
-Boot official NixOS live media in UEFI mode. Have network access for the
-pinned build and a writable, separately mounted recovery volume. Verify the
-backup of any data on the disk you select. Use a dedicated target disk and
-keep the Fedora disk out of the installation target. This workflow erases
-the entire selected disk.
+Keep Wi-Fi connected throughout the install. The installer requires
+active Wi-Fi at startup and checks it again before Disko erases the
+target. Have a writable, separately mounted recovery volume and verify
+the backup of any data on the disk you select. Use a dedicated target
+disk and keep the Fedora disk out of the installation target. This
+workflow erases the entire selected disk.
 
 From the repository checkout, replace the two example paths with the target
 disk's by-ID path and the recovery volume's mount point.
@@ -44,9 +74,22 @@ verified archive on media separate from the laptop.
 
 When installation succeeds, shut down, remove the live media, and boot
 from the target. Enter your disk passphrase, log in using your chosen
-account, and verify `sudo`. The installed flake in `/etc/nixos` includes
-the local account declaration and the project lock. It contains no
-password or password hash. Rebuild from that same installed flake.
+account, and verify `sudo`.
+
+## Reconnect on first boot
+
+The installed profile enables redistributable firmware for the Intel AX201
+and uses NetworkManager. Run `sudo nmtui`, choose **Activate a connection**,
+select your Wi-Fi network, and enter its password when prompted. Confirm
+the Wi-Fi device is `connected` with
+`nmcli --fields DEVICE,TYPE,STATE device status`. NetworkManager keeps the
+credentials in local connection state on the encrypted system. The
+installer uses the live Wi-Fi connection directly and leaves the profile
+on the live system.
+
+The installed flake in `/etc/nixos` includes the local account declaration
+and the project lock. It contains no password or password hash. Rebuild
+from that same installed flake.
 
 ```sh
 sudo nixos-rebuild switch --flake path:/etc/nixos#thinkpad

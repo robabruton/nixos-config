@@ -21,6 +21,7 @@
           pkgs.cryptsetup
           pkgs.gnugrep
           pkgs.gnutar
+          pkgs.networkmanager
           pkgs.nix
           pkgs.nixos-install-tools
           pkgs.openssl
