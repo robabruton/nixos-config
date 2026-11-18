@@ -1,4 +1,6 @@
 input {
+    disable-power-key-handling
+
     trackpoint {
         scroll-method "on-button-down"
         scroll-button 274

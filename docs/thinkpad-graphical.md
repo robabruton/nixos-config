@@ -1,12 +1,15 @@
 # Graphical login
 
 The graphical greeter starts on TTY1. Enter the username and password
-chosen during installation. The preset session starts Niri.
+chosen during installation. The preset session starts Niri with a
+Noctalia panel showing workspaces and the clock.
 
 - Press **Super+Enter** to open the Foot terminal.
+- Press **Super+Alt+L** to lock the session.
 - Press **Super+Q** to close the focused window.
 - Press **Super+Shift+E** and confirm to log out. The greeter returns.
-- Press **Ctrl+Alt+F2** to reach the text login and use the same account.
+- From the greeter, press **Ctrl+Alt+F2** to reach the text login and use
+  the same account.
   Press **Ctrl+Alt+F1** to return to the greeter or graphical session.
 
 The system-wide Niri configuration is at `/etc/niri/config.kdl`. For
@@ -14,8 +17,22 @@ login or session startup problems, inspect `journalctl -b -u greetd`
 from the text console.
 
 On the installed ThinkPad, check that the greeter appears on the
-internal panel after unlocking LUKS and that the login and TTY
-shortcuts work on the built-in keyboard.
+internal panel after unlocking LUKS. Check the shortcuts on the built-in
+keyboard, including switching to TTY2 from inside the Niri session.
+
+## Session locking
+
+Noctalia locks the session after 10 minutes of inactivity and before
+the system suspends. Use your installed account password to unlock it.
+Logind handles the lid and power button according to the
+[ThinkPad hardware policy](thinkpad-hardware.md).
+
+The system-wide defaults are in `/etc/noctalia/config.toml`. Noctalia
+settings saved in `~/.local/state/noctalia/settings.toml` take precedence.
+
+On the ThinkPad, close the lid on battery and on AC, then reopen it and
+check for the password prompt on the internal panel. Repeat using the
+power button to suspend.
 
 ## Workstation profile
 
