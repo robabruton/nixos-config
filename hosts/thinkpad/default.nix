@@ -1,6 +1,7 @@
 # Configures the installed ThinkPad console system and its boot mounts.
 {
   imports = [
+    ../../modules/base
     (import ./disk-layout.nix { device = "/dev/disk/by-id/thinkpad-install-target"; })
     ./hardware.nix
     ./graphical.nix
@@ -21,16 +22,6 @@
   };
   fileSystems."/nix".neededForBoot = true;
 
-  networking = {
-    hostName = "thinkpad";
-    networkmanager.enable = true;
-  };
-  services.resolved.enable = true;
-
-  users.mutableUsers = true;
-  users.users.root.hashedPassword = "!";
-  security.sudo.wheelNeedsPassword = true;
-
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  networking.hostName = "thinkpad";
   system.stateVersion = "26.05";
 }
