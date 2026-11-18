@@ -2,6 +2,7 @@
 {
   imports = [
     (import ./disk-layout.nix { device = "/dev/disk/by-id/thinkpad-install-target"; })
+    ./hardware.nix
   ];
 
   nixpkgs.hostPlatform = "x86_64-linux";
