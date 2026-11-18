@@ -9,3 +9,6 @@ offline recovery.
 
 The [ThinkPad hardware checklist](docs/thinkpad-hardware.md) covers physical
 checks for the X1 Carbon Gen 9.
+
+The [graphical session guide](docs/thinkpad-graphical.md) covers login,
+terminal shortcuts, and TTY access.
