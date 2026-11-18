@@ -1,0 +1,248 @@
+# Installs the locked ThinkPad configuration on an explicitly selected disk.
+set +x
+umask 077
+
+usage() {
+  cat <<'USAGE'
+Usage: install-thinkpad --disk DEVICE --recovery-destination DIRECTORY
+
+Installs on the selected disk after displaying its layout and asking for exact
+erase confirmation. Stores a verified encrypted recovery archive on separate
+media.
+USAGE
+}
+
+fail() {
+  printf 'install-thinkpad: %s\n' "$*" >&2
+  exit 1
+}
+
+if [[ ${1-} == --help && $# == 1 ]]; then
+  usage
+  exit
+fi
+
+disk_argument=
+recovery_argument=
+while (( $# )); do
+  case $1 in
+    --disk)
+      [[ $# -ge 2 && -z $disk_argument ]] || fail "Specify --disk DEVICE once."
+      disk_argument=$2
+      shift 2
+      ;;
+    --recovery-destination)
+      [[ $# -ge 2 && -z $recovery_argument ]] || fail "Specify --recovery-destination DIRECTORY once."
+      recovery_argument=$2
+      shift 2
+      ;;
+    *) fail "Unknown argument $1. See --help." ;;
+  esac
+done
+
+[[ -n $disk_argument && -n $recovery_argument ]] || fail "Provide --disk and --recovery-destination. See --help."
+[[ $EUID == 0 && -t 0 && -t 1 ]] || fail "Run as root in an interactive terminal on NixOS live media."
+[[ -d /sys/firmware/efi/efivars ]] || fail "Boot the live media in UEFI mode."
+[[ $(findmnt -n -o FSTYPE --target /run) == tmpfs ]] || fail "/run must be backed by tmpfs for temporary secrets."
+
+exec 9>/run/lock/nixos-config-thinkpad-install
+flock -n 9 || fail "Another ThinkPad installation is running."
+target=$(realpath -e -- "$disk_argument") || fail "Cannot resolve installation disk $disk_argument."
+recovery=$(realpath -e -- "$recovery_argument") || fail "Cannot resolve recovery directory $recovery_argument."
+[[ -d $recovery && -w $recovery ]] || fail "The recovery destination must be a writable directory."
+
+# Identifies a whole, idle disk and rejects conflicting Disko partition labels.
+disk_identity() {
+  local part label parent mountpoints nodes sys_disk
+  [[ $(realpath -e -- "$disk_argument") == "$target" && -b $target ]] ||
+    fail "The selected disk changed or is unavailable."
+  [[ $(lsblk -dnro TYPE "$target") == disk && $(blockdev --getro "$target") == 0 ]] ||
+    fail "$target must be a writable whole disk."
+  (( $(blockdev --getsize64 "$target") >= 32 * 1024 ** 3 )) ||
+    fail "$target must be at least 32 GiB."
+  nodes=$(lsblk -nr -o TYPE "$target")
+  if grep -qvxE 'disk|part' <<< "$nodes"; then
+    fail "$target has active device mappings."
+  fi
+  mountpoints=$(lsblk -nr -o MOUNTPOINTS "$target")
+  [[ -z $mountpoints && ! -e /dev/mapper/cryptroot ]] ||
+    fail "Unmount the target and close any existing cryptroot mapping first."
+
+  nodes=$(lsblk -nrpo PATH,PARTLABEL)
+  while read -r part label; do
+    case $label in
+      disk-main-ESP|disk-main-system)
+        parent=$(lsblk -dnpo PKNAME "$part")
+        [[ $parent == "$target" ]] || fail "Another disk uses the ThinkPad partition label $label."
+        ;;
+    esac
+  done <<< "$nodes"
+
+  sys_disk="/sys/class/block/${target##*/}/diskseq"
+  cat -- "$sys_disk" || fail "Cannot identify the selected disk's kernel instance."
+  lsblk -bdno MAJ:MIN,SIZE,MODEL,SERIAL "$target"
+}
+
+# Identifies a mounted recovery filesystem backed by a single device.
+recovery_identity() {
+  local source candidates ancestry disk
+  source=$(findmnt -rn -o SOURCE --target "$recovery") ||
+    fail "Mount persistent recovery media first."
+  source=$(realpath -e -- "${source%%\[*}") || fail "Cannot resolve the recovery block device."
+  [[ -b $source ]] || fail "Recovery requires separately mounted block storage."
+  candidates=$(findmnt -nlo SOURCES --target "$recovery") ||
+    fail "Cannot determine the recovery filesystem's backing devices."
+  [[ $candidates != *$'\n'* ]] ||
+    fail "Use recovery media with one backing device."
+  ancestry=$(lsblk -snrpo PATH,TYPE "$source") || fail "Cannot inspect the recovery device."
+  while read -r disk _; do
+    [[ $disk != "$target" ]] || fail "The recovery destination is on the installation disk."
+  done <<< "$ancestry"
+  findmnt -rn -o ID,MAJ:MIN,SOURCE --target "$recovery"
+  printf '%s\n' "$ancestry"
+}
+
+target_identity=$(disk_identity)
+media_identity=$(recovery_identity)
+write_probe=$(mktemp --tmpdir="$recovery" .thinkpad-write-test.XXXXXX) ||
+  fail "Cannot write to the recovery media."
+rm -- "$write_probe"
+
+work=$(mktemp -d --tmpdir=/run thinkpad-install.XXXXXX)
+install_root=
+layout_started=false
+
+# Removes secrets and releases only the installer's own mounts and mapping.
+cleanup() {
+  local status=$?
+  trap - EXIT
+  rm -rf -- "$work"
+  if [[ -n $install_root ]]; then
+    if $layout_started && mountpoint -q "$install_root"; then
+      umount --recursive "$install_root" || status=1
+    fi
+    if $layout_started && ! mountpoint -q "$install_root" && [[ -e /dev/mapper/cryptroot ]]; then
+      cryptsetup close cryptroot || status=1
+    fi
+    rmdir -- "$install_root" || status=1
+  fi
+  if (( status )); then
+    printf 'Installation did not complete. Inspect the preceding error and any remaining mounts before retrying.\n' >&2
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+install_root=$(mktemp -d --tmpdir=/run thinkpad-target.XXXXXX)
+
+read -r -p 'Choose a login name: ' account
+[[ $account =~ ^[a-z_][a-z0-9_-]{0,31}$ && $account != root ]] ||
+  fail "Use a Linux login name other than root, with up to 32 lowercase characters, digits, underscores, or hyphens."
+getent passwd "$account" >/dev/null && fail "Choose a login name that is not a live-system account."
+
+source="$work/source"
+mkdir -- "$source"
+cp -R --no-preserve=mode -- "$THINKPAD_FLAKE"/{flake.nix,flake.lock,hosts,scripts} "$source/"
+printf '{
+  users.users.%s = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" "networkmanager" ];
+  };
+}\n' "$account" > "$source/thinkpad-account.nix"
+
+echo 'Building the locked ThinkPad system and Disko operation.'
+closure=$(nix --extra-experimental-features 'nix-command flakes' build \
+  --no-update-lock-file --no-link --print-out-paths \
+  "path:$source#nixosConfigurations.thinkpad.config.system.build.toplevel")
+[[ $closure == /nix/store/* && -d $closure ]] || fail "The ThinkPad build did not return one system closure."
+
+boot_secret="$work/disk-passphrase"
+disko_args=(
+  --mode 'destroy,format,mount' --flake "$THINKPAD_FLAKE#thinkpad-install"
+  --argstr targetDisk "$target" --argstr passphraseFile "$boot_secret"
+  --root-mountpoint "$install_root"
+)
+disko "${disko_args[@]}" --dry-run >/dev/null
+
+lsblk -o PATH,SIZE,TYPE,FSTYPE,MODEL,SERIAL,MOUNTPOINTS "$target"
+printf 'The selected disk %s is erased and replaced with a 4 GiB EFI partition and LUKS2-encrypted Btrfs.\n' "$target"
+printf 'The verified recovery archive is written to %s.\n' "$recovery"
+printf 'Confirm your backup, then type exactly "ERASE %s": ' "$target"
+read -r confirmation
+[[ $confirmation == "ERASE $target" ]] || fail "Confirmation did not match. The disk was not changed."
+
+IFS= read -rs -p 'New disk boot passphrase: ' passphrase
+printf '\n'
+IFS= read -rs -p 'Repeat disk boot passphrase: ' repeat
+printf '\n'
+[[ -n $passphrase && $passphrase == "$repeat" ]] || fail "The disk passphrases must be nonempty and match."
+printf '%s' "$passphrase" > "$boot_secret"
+unset passphrase repeat
+
+[[ $(disk_identity) == "$target_identity" ]] || fail "Disk identity changed after preflight."
+[[ $(recovery_identity) == "$media_identity" ]] || fail "Recovery media changed after preflight."
+layout_started=true
+disko "${disko_args[@]}" --yes-wipe-all-disks
+
+udevadm settle
+partition=/dev/disk/by-partlabel/disk-main-system
+[[ $(lsblk -dnpo PKNAME "$partition") == "$target" ]] ||
+  fail "The encrypted system partition does not belong to the selected disk."
+mountpoint -q "$install_root" || fail "Disko did not mount the target root."
+mountpoint -q "$install_root/boot" || fail "Disko did not mount the EFI partition."
+# Disko inherits the private umask used for secrets. The system and its
+# installer need ordinary traversal permissions on these installed paths.
+chmod 0755 -- "$install_root" "$install_root"/{home,nix,var,var/log}
+cryptsetup open --test-passphrase --key-file "$boot_secret" "$partition"
+
+echo 'Creating and verifying the offline recovery package.'
+mkdir -- "$work/recovery" "$work/verified"
+recovery_key="$work/recovery/recovery-key.txt"
+header="$work/recovery/luks-header.img"
+openssl rand -base64 48 > "$recovery_key"
+cryptsetup luksAddKey --key-file "$boot_secret" "$partition" "$recovery_key"
+rm -- "$boot_secret"
+cryptsetup open --test-passphrase --key-file "$recovery_key" "$partition"
+cryptsetup luksHeaderBackup "$partition" --header-backup-file "$header"
+cryptsetup open --test-passphrase --header "$header" --key-file "$recovery_key" "$partition"
+uuid=$(cryptsetup luksUUID "$partition")
+printf 'LUKS UUID: %s\nUse trusted live media to verify SHA256SUMS and unlock this container with recovery-key.txt.\nThe header backup contains key-slot metadata. Keep it with the encrypted archive.\n' "$uuid" > "$work/recovery/recovery.txt"
+
+(
+  cd "$work/recovery" || exit
+  sha256sum recovery-key.txt luks-header.img recovery.txt > SHA256SUMS
+  tar -cf - recovery-key.txt luks-header.img recovery.txt SHA256SUMS
+) | age --passphrase --output "$work/recovery.tar.age"
+age --decrypt --output "$work/recovery.tar" "$work/recovery.tar.age"
+tar -xf "$work/recovery.tar" -C "$work/verified"
+(cd "$work/verified" && sha256sum --check SHA256SUMS)
+[[ $(recovery_identity) == "$media_identity" ]] || fail "Recovery media changed before the archive was saved."
+archive="$recovery/thinkpad-luks-$uuid.tar.age"
+[[ ! -e $archive && ! -L $archive ]] || fail "The recovery archive already exists at $archive."
+partial=$(mktemp --tmpdir="$recovery" .thinkpad-recovery.XXXXXX)
+cp -- "$work/recovery.tar.age" "$partial"
+cmp -- "$work/recovery.tar.age" "$partial"
+sync -f "$partial"
+mv -T --no-clobber -- "$partial" "$archive"
+[[ ! -e $partial ]] || fail "The recovery archive was not published. The encrypted temporary copy is at $partial."
+sync -f "$archive"
+echo "Verified recovery package: $archive"
+
+echo 'Installing NixOS and provisioning the chosen account.'
+install -d -m 0700 "$install_root/etc/nixos"
+cp -R --no-preserve=mode -- "$source/." "$install_root/etc/nixos/"
+nixos-install --root "$install_root" --system "$closure" --no-root-passwd --no-channel-copy
+[[ -f $install_root/boot/EFI/systemd/systemd-bootx64.efi ]] || fail "The EFI bootloader was not installed."
+nixos-enter --root "$install_root" -c "passwd $account"
+read -r name state _ < <(nixos-enter --root "$install_root" -c "LC_ALL=C passwd -S $account") ||
+  fail "Cannot verify the account password."
+[[ $name == "$account" && $state == P ]] || fail "The chosen account has no usable password."
+read -r name state _ < <(nixos-enter --root "$install_root" -c 'LC_ALL=C passwd -S root') ||
+  fail "Cannot verify the root account policy."
+[[ $name == root && $state == L ]] || fail "Root password login was not locked."
+
+umount --recursive "$install_root"
+cryptsetup close cryptroot
+layout_started=false
+echo 'Installation completed. The target filesystems are unmounted and the encryption mapping is closed.'
