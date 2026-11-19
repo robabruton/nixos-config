@@ -23,6 +23,7 @@
 
     # Override greetd's module default so PAM requires an account password.
     security.pam.services.greetd.allowNullPassword = lib.mkForce false;
+    security.rtkit.enable = true;
 
     environment = {
       etc."niri/config.kdl".text = builtins.readFile ./niri.kdl;

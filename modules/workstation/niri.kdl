@@ -8,4 +8,9 @@ binds {
     Mod+Left { focus-column-left; }
     Mod+Right { focus-column-right; }
     Mod+Shift+E { quit; }
+
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "noctalia" "msg" "volume-up"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "noctalia" "msg" "volume-down"; }
+    XF86AudioMute repeat=false allow-when-locked=true { spawn "noctalia" "msg" "volume-mute"; }
+    XF86AudioMicMute repeat=false allow-when-locked=true { spawn "noctalia" "msg" "mic-mute"; }
 }

@@ -33,6 +33,18 @@ git clone https://github.com/robabruton/nixos-config.git
 The public clone needs no credentials. Keep any Git credentials in
 your account's credential storage, outside the NixOS configuration.
 
+## Audio
+
+Use the speaker and microphone controls in the Noctalia panel to adjust
+levels or mute a device. Open the audio panel from a control to select
+input and output devices. The volume and mute keys work in Niri.
+PipeWire handles playback and capture, and WirePlumber manages devices
+and routing. Run `wpctl status` to see the available devices and defaults.
+
+On the ThinkPad, play audio through the speakers and record a short clip
+with the built-in microphone. Check the volume and mute keys, then repeat
+playback and recording with a headset if you use one.
+
 ## Session locking
 
 Noctalia locks the session after 10 minutes of inactivity and before
