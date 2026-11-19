@@ -23,6 +23,10 @@
 
     # Override greetd's module default so PAM requires an account password.
     security.pam.services.greetd.allowNullPassword = lib.mkForce false;
+    security.rtkit.enable = true;
+
+    services.gvfs.enable = true;
+    xdg.mime.defaultApplications."inode/directory" = [ "org.gnome.Nautilus.desktop" ];
 
     environment = {
       etc."niri/config.kdl".text = builtins.readFile ./niri.kdl;
@@ -31,7 +35,9 @@
         pkgs.firefox
         pkgs.foot
         pkgs.git
+        pkgs.nautilus
         pkgs.noctalia
+        pkgs.yazi
       ];
     };
   };

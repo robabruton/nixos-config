@@ -1,11 +1,23 @@
 spawn-at-startup "env" "NOCTALIA_CONFIG_HOME=/etc" "noctalia"
 
+screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+
 binds {
     Mod+Return { spawn "foot"; }
+    Mod+E repeat=false hotkey-overlay-title="Open Files" { spawn "nautilus"; }
     Mod+D repeat=false hotkey-overlay-title="Open the application launcher" { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
     Mod+Alt+L { spawn "noctalia" "msg" "session" "lock"; }
     Mod+Q { close-window; }
     Mod+Left { focus-column-left; }
     Mod+Right { focus-column-right; }
     Mod+Shift+E { quit; }
+
+    Print { screenshot; }
+    Ctrl+Print { screenshot-screen; }
+    Alt+Print { screenshot-window; }
+
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "noctalia" "msg" "volume-up"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "noctalia" "msg" "volume-down"; }
+    XF86AudioMute repeat=false allow-when-locked=true { spawn "noctalia" "msg" "volume-mute"; }
+    XF86AudioMicMute repeat=false allow-when-locked=true { spawn "noctalia" "msg" "mic-mute"; }
 }

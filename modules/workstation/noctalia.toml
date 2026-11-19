@@ -1,12 +1,12 @@
 [shell]
-clipboard_enabled = false
+clipboard_enabled = true
 setup_wizard_enabled = false
 
 [bar.main]
 position = "top"
 start = ["workspaces"]
 center = ["clock"]
-end = []
+end = ["input_volume", "volume", "clipboard"]
 
 [lockscreen]
 enabled = true
